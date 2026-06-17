@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hybrid IR Agent — SOC Platform</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ── Reset & Base ──────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root {
+  --bg:        #030b15;
+  --surface:   #0d1829;
+  --surface2:  #111f34;
+  --border:    #1a2e4a;
+  --accent:    #00d4ff;
+  --accent2:   #0077ff;
+  --text:      #e2eaf4;
+  --muted:     #6b829e;
+  --critical:  #ff3b5c;
+  --high:      #ff7a00;
+  --medium:    #f5c518;
+  --low:       #00e887;
+  --sidebar-w: 260px;
+  --radius:    12px;
+}
+html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.6}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;border:none;background:none;font:inherit;color:inherit}
+input,select,textarea{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;width:100%;outline:none;transition:.2s border-color}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+select option{background:var(--surface2)}
+
+/* ── Scrollbar ─────────────────────────────────────────── */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--surface)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── Page sections ─────────────────────────────────────── */
+.page{display:none;height:100%;flex-direction:column}
+.page.active{display:flex}
+
+/* ── Auth pages ────────────────────────────────────────── */
+#auth-wrapper{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0,212,255,.12) 0%, transparent 60%), var(--bg)}
+.auth-card{width:100%;max-width:420px;background:rgba(13,24,41,.85);border:1px solid var(--border);border-radius:20px;padding:40px;backdrop-filter:blur(20px);box-shadow:0 32px 80px rgba(0,0,0,.6)}
+.auth-logo{text-align:center;margin-bottom:32px}
+.auth-logo .shield-icon{width:56px;height:56px;background:linear-gradient(135deg,rgba(0,212,255,.2),rgba(0,119,255,.1));border:1px solid rgba(0,212,255,.3);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:26px}
+.auth-logo h1{font-size:18px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#fff}
+.auth-logo p{color:var(--muted);font-size:11px;letter-spacing:1px;margin-top:4px;font-family:monospace}
+.auth-tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:28px}
+.auth-tab{flex:1;padding:10px;text-align:center;font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);cursor:pointer;transition:.2s;border-bottom:2px solid transparent;margin-bottom:-1px}
+.auth-tab.active{color:var(--accent);border-color:var(--accent)}
+.form-group{margin-bottom:16px}
+.form-label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 20px;border-radius:9px;font-weight:600;font-size:13px;transition:.2s;border:1px solid transparent;cursor:pointer}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#000;width:100%;margin-top:8px}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+.btn-danger{background:rgba(255,59,92,.12);color:var(--critical);border-color:rgba(255,59,92,.3)}
+.btn-danger:hover{background:rgba(255,59,92,.2)}
+.btn-ghost{background:var(--surface2);color:var(--text);border-color:var(--border)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-success{background:rgba(0,232,135,.12);color:var(--low);border-color:rgba(0,232,135,.3)}
+.btn-sm{padding:6px 12px;font-size:12px}
+.alert{padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:14px;display:none}
+.alert.show{display:block}
+.alert-error{background:rgba(255,59,92,.1);border:1px solid rgba(255,59,92,.2);color:#ff8099}
+.alert-success{background:rgba(0,232,135,.1);border:1px solid rgba(0,232,135,.2);color:#00e887}
+.forgot-link{text-align:center;margin-top:16px;font-size:12px;color:var(--muted)}
+.forgot-link a{color:var(--accent);cursor:pointer}
+.auth-form{display:none}
+.auth-form.active{display:block}
+
+/* ── App Layout ─────────────────────────────────────────── */
+#app-wrapper{display:none;height:100vh;overflow:hidden}
+#app-wrapper.active{display:flex}
+.sidebar{width:var(--sidebar-w);background:rgba(13,24,41,.95);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100vh;flex-shrink:0;backdrop-filter:blur(20px);position:relative;z-index:10}
+.sidebar-header{padding:20px;border-bottom:1px solid var(--border)}
+.sidebar-brand{display:flex;align-items:center;gap:12px}
+.brand-icon{width:36px;height:36px;background:linear-gradient(135deg,rgba(0,212,255,.25),rgba(0,119,255,.1));border:1px solid rgba(0,212,255,.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.brand-text{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fff;line-height:1.3}
+.brand-sub{font-size:9px;color:var(--muted);letter-spacing:.5px;font-family:monospace}
+.sidebar-nav{flex:1;padding:12px 10px;overflow-y:auto}
+.nav-section{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);padding:10px 10px 6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;transition:.2s;margin-bottom:2px;border:1px solid transparent}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:rgba(0,212,255,.08);border-color:rgba(0,212,255,.15);color:var(--accent)}
+.nav-item .icon{width:18px;text-align:center;font-size:15px;flex-shrink:0}
+.nav-item .badge{margin-left:auto;font-size:10px;padding:2px 7px;border-radius:20px;background:rgba(255,59,92,.2);color:var(--critical);font-weight:700}
+.sidebar-footer{padding:14px;border-top:1px solid var(--border)}
+.user-info{display:flex;align-items:center;gap:10px;padding:10px;border-radius:9px;background:var(--surface2);margin-bottom:10px}
+.user-avatar{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#000;flex-shrink:0}
+.user-name{font-size:12px;font-weight:600;color:var(--text)}
+.user-role{font-size:10px;color:var(--muted);font-family:monospace}
+.logout-btn{width:100%;text-align:left;padding:9px 12px;border-radius:8px;color:var(--critical);font-size:12px;font-weight:600;background:rgba(255,59,92,.06);border:1px solid rgba(255,59,92,.15);display:flex;align-items:center;gap:8px;transition:.2s}
+.logout-btn:hover{background:rgba(255,59,92,.12)}
+
+/* ── Main content ───────────────────────────────────────── */
+.main-content{flex:1;overflow-y:auto;height:100vh}
+.page-content{display:none;padding:32px;animation:fadeIn .2s ease}
+.page-content.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── Page header ────────────────────────────────────────── */
+.page-header{margin-bottom:28px}
+.page-title{font-size:22px;font-weight:700;color:#fff;display:flex;align-items:center;gap:10px}
+.page-title .icon{font-size:20px}
+.page-subtitle{color:var(--muted);font-size:12px;margin-top:4px;font-family:monospace}
+
+/* ── Cards / Grid ───────────────────────────────────────── */
+.grid{display:grid;gap:20px}
+.grid-4{grid-template-columns:repeat(4,1fr)}
+.grid-2{grid-template-columns:1fr 1fr}
+.grid-3{grid-template-columns:1fr 1fr 1fr}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;position:relative;overflow:hidden}
+.card-sm{padding:16px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;position:relative;overflow:hidden;transition:.2s}
+.stat-card:hover{border-color:rgba(0,212,255,.3)}
+.stat-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:8px}
+.stat-value{font-size:36px;font-weight:800;line-height:1;margin-bottom:4px}
+.stat-sub{font-size:11px;color:var(--muted)}
+.stat-icon{position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:40px;opacity:.08}
+.card-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:16px;display:flex;align-items:center;justify-content:between;gap:8px}
+
+/* ── Severity badges ─────────────────────────────────────── */
+.badge{display:inline-block;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.badge-critical{background:rgba(255,59,92,.12);color:var(--critical);border:1px solid rgba(255,59,92,.25)}
+.badge-high{background:rgba(255,122,0,.12);color:var(--high);border:1px solid rgba(255,122,0,.25)}
+.badge-medium{background:rgba(245,197,24,.12);color:var(--medium);border:1px solid rgba(245,197,24,.25)}
+.badge-low{background:rgba(0,232,135,.12);color:var(--low);border:1px solid rgba(0,232,135,.25)}
+.badge-open{background:rgba(0,212,255,.08);color:var(--accent);border:1px solid rgba(0,212,255,.2)}
+.badge-progress{background:rgba(255,122,0,.08);color:var(--high);border:1px solid rgba(255,122,0,.2)}
+.badge-resolved{background:rgba(0,232,135,.08);color:var(--low);border:1px solid rgba(0,232,135,.2)}
+
+/* ── Table ──────────────────────────────────────────────── */
+.table-wrap{border-radius:var(--radius);border:1px solid var(--border);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:var(--surface2)}
+th{padding:10px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:12px 16px;border-bottom:1px solid rgba(26,46,74,.5);font-size:13px;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tbody tr{transition:.15s}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+
+/* ── Forms ──────────────────────────────────────────────── */
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.section-divider{border:none;border-top:1px solid var(--border);margin:24px 0}
+
+/* ── Risk meter ─────────────────────────────────────────── */
+.risk-meter{width:100%;height:10px;background:var(--surface2);border-radius:5px;overflow:hidden;margin:12px 0;border:1px solid var(--border)}
+.risk-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--low),var(--medium),var(--high),var(--critical));transition:width .6s ease}
+.risk-score-big{font-size:56px;font-weight:900;line-height:1;color:#fff}
+.risk-score-label{font-size:12px;color:var(--muted);font-family:monospace}
+
+/* ── Report card ─────────────────────────────────────────── */
+.report-card{background:var(--surface);border:2px dashed var(--border);border-radius:var(--radius);padding:32px;font-family:monospace}
+.report-header{border-bottom:1px solid var(--border);padding-bottom:16px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:start}
+.report-field{margin-bottom:12px;font-size:12px}
+.report-field .label{color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-size:10px}
+.report-field .value{color:var(--text);margin-top:2px}
+.report-actions{margin-top:24px;display:flex;gap:10px;flex-wrap:wrap}
+
+/* ── Playbook result ─────────────────────────────────────── */
+.playbook-result{margin-top:20px;background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:0 var(--radius) var(--radius) 0;padding:16px}
+
+/* ── Activity feed ───────────────────────────────────────── */
+.feed-item{display:flex;align-items:start;gap:12px;padding:12px 0;border-bottom:1px solid rgba(26,46,74,.4)}
+.feed-item:last-child{border-bottom:none}
+.feed-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.feed-dot-critical{background:var(--critical);box-shadow:0 0 6px var(--critical)}
+.feed-dot-high{background:var(--high);box-shadow:0 0 6px var(--high)}
+.feed-dot-medium{background:var(--medium)}
+.feed-dot-low{background:var(--low)}
+.feed-text{font-size:12px;color:var(--text);flex:1}
+.feed-time{font-size:10px;color:var(--muted);font-family:monospace}
+
+/* ── Search & Filter bar ─────────────────────────────────── */
+.toolbar{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
+.toolbar input,.toolbar select{flex:1;min-width:180px;max-width:280px}
+.toolbar .actions{margin-left:auto;display:flex;gap:8px}
+
+/* ── Empty state ─────────────────────────────────────────── */
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty-state .icon{font-size:48px;margin-bottom:12px;opacity:.4}
+.empty-state p{font-size:13px}
+
+/* ── Toast ───────────────────────────────────────────────── */
+#toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:12px;min-width:260px;max-width:360px;display:flex;align-items:center;gap:10px;animation:slideIn .25s ease;box-shadow:0 8px 30px rgba(0,0,0,.4)}
+.toast.success{border-color:rgba(0,232,135,.3);color:var(--low)}
+.toast.error{border-color:rgba(255,59,92,.3);color:var(--critical)}
+.toast.info{border-color:rgba(0,212,255,.3);color:var(--accent)}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+
+/* ── Chart containers ────────────────────────────────────── */
+.chart-wrap{position:relative;height:220px;width:100%}
+
+/* ── Modal ───────────────────────────────────────────────── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal-overlay.show{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px;max-width:480px;width:90%;animation:fadeIn .2s ease}
+.modal-title{font-size:16px;font-weight:700;color:#fff;margin-bottom:20px}
+.modal-actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media(max-width:900px){
+  .sidebar{width:60px}
+  .brand-text,.brand-sub,.nav-item span:not(.icon),.user-name,.user-role,.user-info .user-name,.user-info .user-role,.logout-btn span{display:none}
+  .nav-item{justify-content:center;padding:12px}
+  .sidebar-header{padding:14px}
+  .brand-icon{margin:0 auto}
+  .sidebar-footer{padding:8px}
+  .user-info{justify-content:center}
+  .user-avatar{margin:0}
+  .logout-btn{justify-content:center}
+  .main-content{margin-left:0}
+  .grid-4{grid-template-columns:1fr 1fr}
+  .grid-2{grid-template-columns:1fr}
+}
+@media(max-width:600px){
+  .grid-4,.grid-3{grid-template-columns:1fr}
+  .grid-2{grid-template-columns:1fr}
+  .page-content{padding:16px}
+  .form-row{grid-template-columns:1fr}
+}
+
+/* ── Glow effects ────────────────────────────────────────── */
+.glow-accent{color:var(--accent);text-shadow:0 0 20px rgba(0,212,255,.4)}
+.border-accent{border-color:rgba(0,212,255,.3)!important}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.pulse{animation:pulse 2s infinite}
+
+/* ── Status dot ──────────────────────────────────────────── */
+.status-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px}
+
+/* ── Print styles ────────────────────────────────────────── */
+@media print{
+  .sidebar,.toolbar,.report-actions,#toast-container,.modal-overlay{display:none!important}
+  .main-content{margin:0!important}
+  .page-content{display:block!important}
+  .card,.report-card{border:1px solid #ccc;box-shadow:none}
+  body{background:#fff;color:#000}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     AUTH SECTION
+═══════════════════════════════════════════════════════ -->
+<div id="auth-wrapper">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="shield-icon">🛡️</div>
+      <h1>HYBRID IR AGENT</h1>
+      <p>SECURITY OPERATIONS PLATFORM</p>
+    </div>
+
+    <div class="auth-tabs">
+      <div class="auth-tab active" onclick="switchAuthTab('login')">Sign In</div>
+      <div class="auth-tab" onclick="switchAuthTab('register')">Register</div>
+      <div class="auth-tab" onclick="switchAuthTab('forgot')">Reset</div>
+    </div>
+
+    <!-- Login Form -->
+    <div class="auth-form active" id="form-login">
+      <div class="alert alert-error" id="login-error"></div>
+      <div class="alert alert-success" id="login-success"></div>
+      <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <input type="email" id="login-email" placeholder="analyst@soc.cyber" autocomplete="email" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" />
+      </div>
+      <button class="btn btn-primary" onclick="doLogin()">🔐 Initialize Secure Session</button>
+      <p class="forgot-link">Demo: <a onclick="fillDemo()">admin@soc.cyber / admin123</a></p>
+    </div>
+
+    <!-- Register Form -->
+    <div class="auth-form" id="form-register">
+      <div class="alert alert-error" id="reg-error"></div>
+      <div class="alert alert-success" id="reg-success"></div>
+      <div class="form-group">
+        <label class="form-label">Full Name</label>
+        <input type="text" id="reg-name" placeholder="John Analyst" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <input type="email" id="reg-email" placeholder="analyst@soc.cyber" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" id="reg-password" placeholder="Min 6 characters" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Role</label>
+        <select id="reg-role">
+          <option value="SECURITY_ANALYST">Security Analyst</option>
+          <option value="ADMIN">Administrator</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="doRegister()">🛡️ Create Analyst Account</button>
+    </div>
+
+    <!-- Forgot Password Form -->
+    <div class="auth-form" id="form-forgot">
+      <div class="alert alert-error" id="forgot-error"></div>
+      <div class="alert alert-success" id="forgot-success"></div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:20px">Enter your registered email to receive reset instructions.</p>
+      <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <input type="email" id="forgot-email" placeholder="analyst@soc.cyber" />
+      </div>
+      <button class="btn btn-primary" onclick="doForgot()">📧 Send Reset Link</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     APP SHELL
+═══════════════════════════════════════════════════════ -->
+<div id="app-wrapper">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-brand">
+        <div class="brand-icon">🛡️</div>
+        <div>
+          <div class="brand-text">Hybrid IR Agent</div>
+          <div class="brand-sub">SOC PLATFORM v2.0</div>
+        </div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section">Operations</div>
+      <div class="nav-item active" onclick="navigate('dashboard')"><span class="icon">📊</span><span>SOC Dashboard</span></div>
+      <div class="nav-item" onclick="navigate('basic-ir')"><span class="icon">🔍</span><span>Incident Lookup</span></div>
+      <div class="nav-item" onclick="navigate('report-gen')"><span class="icon">📄</span><span>Report Generator</span></div>
+
+      <div class="nav-section">Management</div>
+      <div class="nav-item" onclick="navigate('multi-incident')"><span class="icon">📋</span><span>Incident Registry</span><span class="badge" id="open-badge">0</span></div>
+      <div class="nav-item" onclick="navigate('risk-calc')"><span class="icon">⚠️</span><span>Risk Calculator</span></div>
+
+      <div class="nav-section">Intelligence</div>
+      <div class="nav-item" onclick="navigate('analytics')"><span class="icon">📈</span><span>Analytics</span></div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="user-avatar">A</div>
+        <div>
+          <div class="user-name" id="user-name-display">Analyst</div>
+          <div class="user-role" id="user-role-display">ANALYST</div>
+        </div>
+      </div>
+      <button class="logout-btn" onclick="doLogout()">🚪 <span>Exit Console</span></button>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+
+    <!-- ── Dashboard ─────────────────────────────────── -->
+    <div class="page-content active" id="page-dashboard">
+      <div class="page-header">
+        <h1 class="page-title"><span class="icon">📊</span> SEC_OPS COMMAND CONSOLE</h1>
+        <p class="page-subtitle">Real-time situational awareness · Global threat posture monitoring</p>
+      </div>
+
+      <div class="grid grid-4" style="margin-bottom:24px">
+        <div class="stat-card">
+          <div class="stat-icon">📁</div>
+          <div class="stat-label">Total Incidents</div>
+          <div class="stat-value" id="dash-total" style="color:var(--accent)">0</div>
+          <div class="stat-sub">All time</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🔴</div>
+          <div class="stat-label">Critical</div>
+          <div class="stat-value" id="dash-critical" style="color:var(--critical)">0</div>
+          <div class="stat-sub">Needs immediate action</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🟠</div>
+          <div class="stat-label">High Severity</div>
+          <div class="stat-value" id="dash-high" style="color:var(--high)">0</div>
+          <div class="stat-sub">Priority response</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">📂</div>
+          <div class="stat-label">Open Cases</div>
+          <div class="stat-value" id="dash-open" style="color:var(--medium)">0</div>
+          <div class="stat-sub">Awaiting resolution</div>
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-title">⚡ Live Telemetry Feed</div>
+          <div id="dash-feed">
+            <div class="empty-state"><div class="icon">📡</div><p>Loading telemetry...</p></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">📊 Severity Distribution</div>
+          <div class="chart-wrap"><canvas id="dash-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Basic IR ────────────────────────────────────── -->
+    <div class="page-content" id="page-basic-ir">
+      <div class="page-header">
+        <h1 class="page-title"><span class="icon">🔍</span> Dynamic Incident Lookup</h1>
+        <p class="page-subtitle">Enter an incident type to retrieve automated response playbook</p>
+      </div>
+
+      <div style="max-width:600px">
+        <div class="card">
+          <div class="form-group">
+            <label class="form-label">Incident Vector Classification</label>
+            <input type="text" id="ir-input" placeholder="e.g., ransomware, malware, phishing, ddos..." 
+                   list="ir-suggestions" onkeydown="if(event.key==='Enter')doIRLookup()" />
+            <datalist id="ir-suggestions">
+              <option value="malware"><option value="phishing"><option value="ddos">
+              <option value="unauthorized access"><option value="ransomware"><option value="data breach">
+            </datalist>
+          </div>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+            <button class="btn btn-ghost btn-sm" onclick="quickFill('ransomware')">🔴 Ransomware</button>
+            <button class="btn btn-ghost btn-sm" onclick="quickFill('malware')">🟠 Malware</button>
+            <button class="btn btn-ghost btn-sm" onclick="quickFill('phishing')">🟡 Phishing</button>
+            <button class="btn btn-ghost btn-sm" onclick="quickFill('ddos')">🔵 DDoS</button>
+            <button class="btn btn-ghost btn-sm" onclick="quickFill('data breach')">🔴 Data Breach</button>
+          </div>
+
+          <button class="btn btn-primary" onclick="doIRLookup()" style="width:100%">🔎 Query Response Playbook</button>
+        </div>
+
+        <div class="playbook-result" id="ir-result" style="display:none">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <span style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent)">Automated Playbook Response</span>
+            <span class="badge" id="ir-badge"></span>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">THREAT VECTOR</div>
+          <div style="font-size:16px;font-weight:700;text-transform:uppercase;margin-bottom:12px" id="ir-type"></div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">REMEDIATION PROTOCOL</div>
+          <div style="font-size:13px;color:var(--text);font-style:italic" id="ir-plan"></div>
+          <div style="margin-top:16px">
+            <button class="btn btn-ghost btn-sm" onclick="sendToReport()">📄 Generate Full Report</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:20px">
+          <div class="card-title">🗂️ Supported Threat Vectors</div>
+          <table style="font-size:12px">
+            <thead><tr><th>Incident Type</th><th>Severity</th><th>Response Priority</th></tr></thead>
+            <tbody>
+              <tr><td>Ransomware</td><td><span class="badge badge-critical">Critical</span></td><td>Immediate isolation</td></tr>
+              <tr><td>Data Breach</td><td><span class="badge badge-critical">Critical</span></td><td>Immediate isolation</td></tr>
+              <tr><td>Malware</td><td><span class="badge badge-high">High</span></td><td>Within 1 hour</td></tr>
+              <tr><td>DDoS</td><td><span class="badge badge-high">High</span></td><td>Within 1 hour</td></tr>
+              <tr><td>Unauthorized Access</td><td><span class="badge badge-high">High</span></td><td>Within 1 hour</td></tr>
+              <tr><td>Phishing</td><td><span class="badge badge-medium">Medium</span></td><td>Within 4 hours</td></tr>
+              <tr><td>Other</td><td><span class="badge badge-low">Low</span></td><td>Monitor & investigate</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Report Generator ───────────────────────────── -->
+    <div class="page-content" id="page-report-gen">
+      <div class="page-header">
+        <h1 class="page-title"><span class="icon">📄</span> NIST-Compliant Incident Report Engine</h1>
+        <p class="page-subtitle">Generate professional incident dockets for compliance and audit</p>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-title">📝 Incident Data Entry</div>
+          <div class="form-group">
+            <label class="form-label">Incident Type / Vector</label>
+            <input type="text" id="rg-type" placeholder="e.g., ransomware, phishing..." list="ir-suggestions" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Affected System / Asset</label>
+            <input type="text" id="rg-system" placeholder="e.g., Finance DB Server, Mail Exchange..." />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Reporting Analyst Name</label>
+            <input type="text" id="rg-reporter" placeholder="John Smith" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Additional Notes / Observations</label>
+            <textarea id="rg-notes" placeholder="Describe any additional context, IOCs, or observations..." style="height:100px"></textarea>
+          </div>
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-primary" style="flex:1" onclick="generateReport()">⚡ Generate Report</button>
+            <button class="btn btn-ghost" onclick="clearReportForm()">✕ Clear</button>
+          </div>
+        </div>
+
+        <div id="report-output-wrap" style="display:none">
+          <div class="report-card" id="printable-report">
+            <div class="report-header">
+              <div>
+                <div style="font-size:14px;font-weight:700;letter-spacing:2px;color:#fff;text-transform:uppercase">CYBER INCIDENT RECORD</div>
+                <div style="font-size:10px;color:var(--accent);margin-top:4px;font-family:monospace" id="rpt-status-line">STATUS // OPEN</div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:10px;color:var(--muted)" id="rpt-timestamp"></div>
+                <div style="font-size:10px;color:var(--muted);margin-top:2px;font-family:monospace">IR-DOCKET-<span id="rpt-id"></span></div>
+              </div>
+            </div>
+            <div class="report-field"><div class="label">Incident Vector</div><div class="value" id="rpt-type"></div></div>
+            <div class="report-field"><div class="label">Target Architecture</div><div class="value" id="rpt-system"></div></div>
+            <div class="report-field"><div class="label">Severity Assignment</div><div class="value" id="rpt-severity"></div></div>
+            <div class="report-field"><div class="label">Triage Protocol</div><div class="value" id="rpt-plan"></div></div>
+            <div class="report-field"><div class="label">Reporting Operator</div><div class="value" id="rpt-reporter"></div></div>
+            <div class="report-field" id="rpt-notes-wrap"><div class="label">Analyst Annotations</div><div class="value" id="rpt-notes"></div></div>
+          </div>
+          <div class="report-actions">
+            <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Print / Save PDF</button>
+            <button class="btn btn-success btn-sm" onclick="saveReportToDb()">💾 Save to Database</button>
+            <button class="btn btn-ghost btn-sm" onclick="downloadReportTxt()">📥 Download .txt</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Multi-Incident Registry ────────────────────── -->
+    <div class="page-content" id="page-multi-incident">
+      <div class="page-header">
+        <h1 class="page-title"><span class="icon">📋</span> Multi-Incident Threat Repository</h1>
+        <p class="page-subtitle">Centralized incident tracking with filtering, search, and export</p>
+      </div>
+
+      <div class="toolbar">
+        <input type="text" id="mi-search" placeholder="🔍 Search incidents, systems..." oninput="renderIncidentTable()" style="max-width:300px" />
+        <select id="mi-filter-sev" onchange="renderIncidentTable()" style="max-width:200px">
+          <option value="">All Severities</option>
+          <option>Critical</option><option>High</option><option>Medium</option><option>Low</option>
+        </select>
+        <select id="mi-filter-status" onchange="renderIncidentTable()" style="max-width:200px">
+          <option value="">All Statuses</option>
+          <option>OPEN</option><option>IN_PROGRESS</option><option>RESOLVED</option>
+        </select>
+        <div class="actions">
+          <button class="btn btn-ghost btn-sm" onclick="exportCSV()">📤 Export CSV</button>
+          <button class="btn btn-primary btn-sm" onclick="openAddModal()">+ Add Incident</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Incident Type</th><th>Affected System</th><th>Severity</th>
+              <th>Reporter</th><th>Status</th><th>Timestamp</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="incident-tbody"></tbody>
+        </table>
+      </div>
+      <div id="incident-empty" class="empty-state" style="display:none">
+        <div class="icon">📭</div><p>No incidents found matching your criteria.</p>
+      </div>
+    </div>
+
+    <!-- ── Risk Calculator ────────────────────────────── -->
+    <div class="page-content" id="page-risk-calc">
+      <div class="page-header">
+        <h1 class="page-title"><span class="icon">⚠️</span> Threat Factor Risk Modeling Engine</h1>
+        <p class="page-subtitle">Quantitative risk scoring using CVSS-inspired methodology</p>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-title">🧮 Risk Parameter Configuration</div>
+          <div class="form-group">
+            <label class="form-label">Threat Context / Incident Profile</label>
+            <select id="rc-type">
+              <option value="ransomware">Ransomware (Base: 9)</option>
+              <option value="data breach">Data Breach (Base: 8)</option>
+              <option value="malware">Malware (Base: 7)</option>
+              <option value="ddos">DDoS (Base: 6)</option>
+              <option value="unauthorized access">Unauthorized Access (Base: 6)</option>
+              <option value="phishing">Phishing (Base: 5)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Systems Affected — Scale (1–10)</label>
+            <input type="range" id="rc-systems" min="1" max="10" value="3" oninput="updateRangeLabel('rc-systems','rc-sys-val')" style="width:100%;margin-bottom:4px" />
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)">
+              <span>1 (Isolated)</span><span id="rc-sys-val" style="color:var(--accent);font-weight:700">3</span><span>10 (Enterprise)</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Data Asset Sensitivity Weight (1–5)</label>
+            <input type="range" id="rc-sensitivity" min="1" max="5" value="2" oninput="updateRangeLabel('rc-sensitivity','rc-sens-val')" style="width:100%;margin-bottom:4px" />
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)">
+              <span>1 (Public)</span><span id="rc-sens-val" style="color:var(--accent);font-weight:700">2</span><span>5 (Top Secret)</span>
+            </div>
+          </div>
+
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin:16px 0;font-size:11px;color:var(--muted);font-family:monospace">
+            Formula: (Base×4) + (Systems×3) + (Sensitivity×3) = Risk Index
+          </div>
+
+          <button class="btn btn-primary" style="width:100%" onclick="calculateRisk()">⚡ Execute Risk Assessment</button>
+        </div>
+
+        <div class="card" id="risk-result-card" style="display:none;flex-direction:column;justify-content:space-between">
+          <div>
+            <div class="card-title">📊 Algorithmic Assessment Matrix</div>
+            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">
+              <div class="risk-score-big" id="rc-score">0</div>
+              <div>
+                <div class="risk-score-label">/ 100 RISK INDEX</div>
+                <div style="margin-top:4px"><span class="badge" id="rc-badge"></span></div>
+              </div>
+            </div>
+            <div class="risk-meter"><div class="risk-fill" id="rc-fill" style="width:0%"></div></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px;font-size:11px;text-align:center">
+              <div style="background:var(--surface2);border-radius:8px;padding:10px">
+                <div style="color:var(--muted)">Base Score</div><div id="rc-base" style="font-weight:700;color:var(--text)">-</div>
+              </div>
+              <div style="background:var(--surface2);border-radius:8px;padding:10px">
+                <div style="color:var(--muted)">Systems</div><div id="rc-sys-sub" style="font-weight:700;color:var(--text)">-</div>
+              </div>
+              <div style="background:var(--surface2);border-radius:8px;padding:10px">
+                <div style="color:var(--muted)">Sensitivity</div><div id="rc-sens-sub" style="font-weight:700;color:var(--text)">-</div>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:16px;background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:0 10px 10px 0;padding:14px">
+            <div style="font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;font-family:monospace;margin-bottom:4px">Mandatory Operations Directive</div>
+            <div style="font-size:13px;font-style:italic" id="rc-action"></div>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="margin-top:12px" onclick="saveRiskAssessment()">💾 Save to Database</button>
+        </div>
+
+        <div class="card" id="risk-history-card" style="grid-column:1/-1">
+          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+            📜 Risk Assessment History
+            <button class="btn btn-ghost btn-sm" onclick="loadRiskHistory()">🔄 Refresh</button>
+          </div>
+          <div id="risk-history-table">
+            <div class="empty-state"><div class="icon">📊</div><p>No assessments yet. Run your first calculation above.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Analytics ──────────────────────────────────── -->
+    <div class="page-content" id="page-analytics">
+      <div class="page-header">
+        <h1 class="page-title"><span class="icon">📈</span> Analytical Threat Intelligence Ledger</h1>
+        <p class="page-subtitle">Visual analytics across incident portfolio and risk landscape</p>
+      </div>
+      <div class="grid grid-2" style="margin-bottom:20px">
+        <div class="card">
+          <div class="card-title">📊 Incidents by Severity Profile</div>
+          <div class="chart-wrap"><canvas id="chart-severity"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">🍩 Incident Stratification</div>
+          <div class="chart-wrap"><canvas id="chart-donut"></canvas></div>
+        </div>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-title">📅 Monthly Incident Trends</div>
+          <div class="chart-wrap"><canvas id="chart-monthly"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">🎯 Attack Vector Distribution</div>
+          <div class="chart-wrap"><canvas id="chart-types"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+  </main><!-- end main-content -->
+</div><!-- end app-wrapper -->
+
+<!-- ── Add Incident Modal ──────────────────────────────── -->
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <div class="modal-title">➕ Add New Incident</div>
+    <div class="form-group">
+      <label class="form-label">Incident Type</label>
+      <input type="text" id="modal-type" placeholder="ransomware, malware, phishing..." list="ir-suggestions" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Affected System</label>
+      <input type="text" id="modal-system" placeholder="Server, Workstation, Network..." />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Reporter Name</label>
+      <input type="text" id="modal-reporter" placeholder="Analyst name" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Additional Notes</label>
+      <textarea id="modal-notes" style="height:70px" placeholder="Optional context..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAddIncident()">⚡ Submit Incident</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CONFIGURATION & STATE
+// ═══════════════════════════════════════════════════════════
+const API = '';  // Same origin
+let TOKEN = localStorage.getItem('ir_token') || '';
+let CURRENT_USER = JSON.parse(localStorage.getItem('ir_user') || 'null');
+let allIncidents = [];
+let lastReport = null;
+let lastRisk = null;
+let dashChart = null, sevChart = null, donutChart = null, monthlyChart = null, typesChart = null;
+
+const RESPONSES = {
+  'malware':             ['High',     'Isolate infected device, run antivirus scan, notify admin.'],
+  'phishing':            ['Medium',   'Block sender, reset passwords, alert users.'],
+  'ddos':                ['High',     'Enable traffic filtering and contact ISP.'],
+  'unauthorized access': ['High',     'Disable compromised account and review logs.'],
+  'ransomware':          ['Critical', 'Disconnect system, preserve backups, contact CERT.'],
+  'data breach':         ['Critical', 'Revoke access, notify DPO, audit logs immediately.'],
+};
+const BASE_SCORES = {ransomware:9,'data breach':8,malware:7,ddos:6,'unauthorized access':6,phishing:5};
+const COLORS = {Critical:'#ff3b5c',High:'#ff7a00',Medium:'#f5c518',Low:'#00e887'};
+
+// ═══════════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════════
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span>${type==='success'?'✅':type==='error'?'❌':'ℹ️'}</span><span>${msg}</span>`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function apiFetch(path, opts={}) {
+  const headers = {'Content-Type':'application/json'};
+  if (TOKEN) headers['Authorization'] = `Bearer ${TOKEN}`;
+  return fetch(API + path, { headers, ...opts });
+}
+
+function sevBadge(sev) {
+  const cl = {Critical:'badge-critical',High:'badge-high',Medium:'badge-medium',Low:'badge-low'}[sev] || 'badge-low';
+  return `<span class="badge ${cl}">${sev}</span>`;
+}
+function statusBadge(s) {
+  const cl = {OPEN:'badge-open',IN_PROGRESS:'badge-progress',RESOLVED:'badge-resolved'}[s] || 'badge-open';
+  return `<span class="badge ${cl}">${s.replace('_',' ')}</span>`;
+}
+function fmtDate(str) { return str ? new Date(str).toLocaleString() : '-'; }
+function updateRangeLabel(id, labelId) {
+  document.getElementById(labelId).textContent = document.getElementById(id).value;
+}
+
+// ═══════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════
+function switchAuthTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active',['login','register','forgot'][i]===tab));
+  document.querySelectorAll('.auth-form').forEach(f=>f.classList.remove('active'));
+  document.getElementById('form-'+tab).classList.add('active');
+}
+function fillDemo() {
+  document.getElementById('login-email').value = 'admin@soc.cyber';
+  document.getElementById('login-password').value = 'admin123';
+}
+function showAlert(id, msg, type='error') {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = `alert alert-${type} show`;
+}
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-password').value;
+  if (!email || !pass) { showAlert('login-error','Please fill all fields'); return; }
+  try {
+    const res = await fetch(API+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
+    const data = await res.json();
+    if (!res.ok) { showAlert('login-error', data.error||'Login failed'); return; }
+    TOKEN = data.token;
+    CURRENT_USER = data.user;
+    localStorage.setItem('ir_token', TOKEN);
+    localStorage.setItem('ir_user', JSON.stringify(CURRENT_USER));
+    enterApp();
+  } catch(e) { showAlert('login-error','Connection error — is the server running?'); }
+}
+async function doRegister() {
+  const name=document.getElementById('reg-name').value.trim();
+  const email=document.getElementById('reg-email').value.trim();
+  const pass=document.getElementById('reg-password').value;
+  const role=document.getElementById('reg-role').value;
+  if (!name||!email||!pass){showAlert('reg-error','All fields required');return;}
+  try {
+    const res=await fetch(API+'/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password:pass,role})});
+    const data=await res.json();
+    if(!res.ok){showAlert('reg-error',data.error||'Registration failed');return;}
+    showAlert('reg-success','Account created! You can now log in.','success');
+    setTimeout(()=>switchAuthTab('login'),1500);
+  } catch(e){showAlert('reg-error','Connection error');}
+}
+async function doForgot() {
+  const email=document.getElementById('forgot-email').value.trim();
+  if(!email){showAlert('forgot-error','Enter your email');return;}
+  await fetch(API+'/api/auth/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
+  showAlert('forgot-success','If that email exists, instructions have been sent.','success');
+}
+function doLogout() {
+  TOKEN=''; CURRENT_USER=null;
+  localStorage.removeItem('ir_token'); localStorage.removeItem('ir_user');
+  document.getElementById('app-wrapper').classList.remove('active');
+  document.getElementById('auth-wrapper').style.display='flex';
+  switchAuthTab('login');
+}
+function enterApp() {
+  document.getElementById('auth-wrapper').style.display='none';
+  document.getElementById('app-wrapper').classList.add('active');
+  // Set user info
+  const n = CURRENT_USER?.name || 'Analyst';
+  document.getElementById('user-avatar').textContent = n[0].toUpperCase();
+  document.getElementById('user-name-display').textContent = n;
+  document.getElementById('user-role-display').textContent = CURRENT_USER?.role || 'ANALYST';
+  navigate('dashboard');
+}
+
+// ═══════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════
+function navigate(page) {
+  document.querySelectorAll('.page-content').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  const map={dashboard:0,'basic-ir':1,'report-gen':2,'multi-incident':3,'risk-calc':4,analytics:5};
+  const items=document.querySelectorAll('.nav-item');
+  if(map[page]!==undefined) items[map[page]]?.classList.add('active');
+  if(page==='dashboard') loadDashboard();
+  if(page==='multi-incident') loadIncidents();
+  if(page==='analytics') loadAnalytics();
+  if(page==='risk-calc') loadRiskHistory();
+}
+
+// ═══════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════
+async function loadDashboard() {
+  try {
+    const res = await apiFetch('/api/incidents');
+    if(!res.ok) return;
+    allIncidents = await res.json();
+    const total = allIncidents.length;
+    const critical = allIncidents.filter(i=>i.severity?.toLowerCase()==='critical').length;
+    const high = allIncidents.filter(i=>i.severity?.toLowerCase()==='high').length;
+    const open = allIncidents.filter(i=>i.status==='OPEN').length;
+    document.getElementById('dash-total').textContent = total;
+    document.getElementById('dash-critical').textContent = critical;
+    document.getElementById('dash-high').textContent = high;
+    document.getElementById('dash-open').textContent = open;
+    document.getElementById('open-badge').textContent = open;
+    renderFeed();
+    renderDashChart();
+  } catch(e) { console.error(e); }
+}
+function renderFeed() {
+  const feed = document.getElementById('dash-feed');
+  if(!allIncidents.length){feed.innerHTML='<div class="empty-state"><div class="icon">📡</div><p>No incidents recorded.</p></div>';return;}
+  feed.innerHTML = allIncidents.slice(0,6).map(inc=>{
+    const sev = (inc.severity||'low').toLowerCase();
+    return `<div class="feed-item">
+      <div class="feed-dot feed-dot-${sev}"></div>
+      <div class="feed-text">
+        <strong style="text-transform:uppercase">${inc.type}</strong> — ${inc.affected_system||inc.affectedSystem||''}
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${fmtDate(inc.created_at||inc.createdAt)}</div>
+      </div>
+      ${sevBadge(inc.severity)}
+    </div>`;
+  }).join('');
+}
+function renderDashChart() {
+  const counts = {};
+  allIncidents.forEach(i=>{ const s=i.severity||'Low'; counts[s]=(counts[s]||0)+1; });
+  const labels = Object.keys(counts), data = labels.map(k=>counts[k]);
+  const colors = labels.map(l=>COLORS[l]||'#6b829e');
+  if(dashChart) dashChart.destroy();
+  const ctx = document.getElementById('dash-chart').getContext('2d');
+  dashChart = new Chart(ctx,{
+    type:'bar',
+    data:{labels,datasets:[{data,backgroundColor:colors,borderRadius:6,borderSkipped:false}]},
+    options:{plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(26,46,74,.5)'},ticks:{color:'#6b829e'}},y:{grid:{color:'rgba(26,46,74,.5)'},ticks:{color:'#6b829e',stepSize:1}}},responsive:true,maintainAspectRatio:false}
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// BASIC IR
+// ═══════════════════════════════════════════════════════════
+function quickFill(v){ document.getElementById('ir-input').value=v; doIRLookup(); }
+function doIRLookup() {
+  const q = document.getElementById('ir-input').value.trim().toLowerCase();
+  if(!q){ toast('Enter an incident type','error'); return; }
+  const [sev, plan] = RESPONSES[q] || ['Low','Monitor system and investigate further.'];
+  const cl = {Critical:'badge-critical',High:'badge-high',Medium:'badge-medium',Low:'badge-low'}[sev];
+  document.getElementById('ir-badge').className=`badge ${cl}`;
+  document.getElementById('ir-badge').textContent=sev;
+  document.getElementById('ir-type').textContent=q.toUpperCase();
+  document.getElementById('ir-plan').textContent=plan;
+  document.getElementById('ir-result').style.display='block';
+  lastReport = {type:q, severity:sev, responsePlan:plan};
+}
+function sendToReport() {
+  if(!lastReport) return;
+  document.getElementById('rg-type').value = lastReport.type;
+  navigate('report-gen');
+}
+
+// ═══════════════════════════════════════════════════════════
+// REPORT GENERATOR
+// ═══════════════════════════════════════════════════════════
+function generateReport() {
+  const type     = document.getElementById('rg-type').value.trim();
+  const system   = document.getElementById('rg-system').value.trim();
+  const reporter = document.getElementById('rg-reporter').value.trim();
+  const notes    = document.getElementById('rg-notes').value.trim();
+  if(!type||!system||!reporter){ toast('Fill required fields: type, system, reporter','error'); return; }
+  const [sev, plan] = RESPONSES[type.toLowerCase()] || ['Low','Monitor system and investigate further.'];
+  const ts = new Date().toLocaleString();
+  const id = Math.random().toString(36).substr(2,8).toUpperCase();
+  document.getElementById('rpt-timestamp').textContent = ts;
+  document.getElementById('rpt-id').textContent = id;
+  document.getElementById('rpt-type').textContent = type.toUpperCase();
+  document.getElementById('rpt-system').textContent = system;
+  document.getElementById('rpt-severity').innerHTML = sevBadge(sev);
+  document.getElementById('rpt-plan').textContent = plan;
+  document.getElementById('rpt-reporter').textContent = reporter;
+  const nw = document.getElementById('rpt-notes-wrap');
+  if(notes){ document.getElementById('rpt-notes').textContent=notes; nw.style.display='block'; }
+  else nw.style.display='none';
+  document.getElementById('report-output-wrap').style.display='block';
+  lastReport = {type,system,reporter,notes,severity:sev,responsePlan:plan};
+  toast('Report generated successfully','success');
+}
+function clearReportForm() {
+  ['rg-type','rg-system','rg-reporter','rg-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('report-output-wrap').style.display='none';
+}
+async function saveReportToDb() {
+  if(!lastReport){ toast('Generate a report first','error'); return; }
+  const res = await apiFetch('/api/incidents',{method:'POST',body:JSON.stringify({
+    type:lastReport.type, affected_system:lastReport.system, severity:lastReport.severity,
+    reporter_name:lastReport.reporter, response_plan:lastReport.responsePlan, notes:lastReport.notes
+  })});
+  if(res.ok){ toast('Report saved to database','success'); } else { toast('Save failed','error'); }
+}
+function downloadReportTxt() {
+  if(!lastReport){ toast('Generate a report first','error'); return; }
+  const ts = new Date().toISOString();
+  const txt = [
+    'CYBER INCIDENT RECORD',
+    '======================',
+    `Timestamp:  ${ts}`,
+    `Type:       ${lastReport.type}`,
+    `System:     ${lastReport.system}`,
+    `Severity:   ${lastReport.severity}`,
+    `Response:   ${lastReport.responsePlan}`,
+    `Reporter:   ${lastReport.reporter}`,
+    lastReport.notes ? `Notes:      ${lastReport.notes}` : '',
+    '',
+    'Generated by Hybrid IR Agent'
+  ].filter(Boolean).join('\n');
+  const blob = new Blob([txt],{type:'text/plain'});
+  const a = document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`IR-Report-${Date.now()}.txt`;
+  a.click();
+}
+
+// ═══════════════════════════════════════════════════════════
+// MULTI-INCIDENT
+// ═══════════════════════════════════════════════════════════
+async function loadIncidents() {
+  try {
+    const res = await apiFetch('/api/incidents');
+    if(!res.ok) return;
+    allIncidents = await res.json();
+    renderIncidentTable();
+  } catch(e){ console.error(e); }
+}
+function renderIncidentTable() {
+  const search = (document.getElementById('mi-search')?.value||'').toLowerCase();
+  const sevF   = (document.getElementById('mi-filter-sev')?.value||'');
+  const statusF= (document.getElementById('mi-filter-status')?.value||'');
+  const filtered = allIncidents.filter(i=>{
+    const matchSearch = !search ||
+      (i.type||'').toLowerCase().includes(search) ||
+      (i.affected_system||'').toLowerCase().includes(search) ||
+      (i.reporter_name||'').toLowerCase().includes(search);
+    const matchSev = !sevF || (i.severity||'').toLowerCase()===sevF.toLowerCase();
+    const matchStatus = !statusF || i.status===statusF;
+    return matchSearch && matchSev && matchStatus;
+  });
+  const tbody = document.getElementById('incident-tbody');
+  const empty = document.getElementById('incident-empty');
+  if(!filtered.length){ tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  tbody.innerHTML = filtered.map(i=>`
+    <tr>
+      <td style="font-weight:600;text-transform:uppercase;color:#fff">${i.type||''}</td>
+      <td style="font-family:monospace;font-size:12px">${i.affected_system||''}</td>
+      <td>${sevBadge(i.severity||'Low')}</td>
+      <td style="color:var(--muted);font-size:12px">${i.reporter_name||'-'}</td>
+      <td>${statusBadge(i.status||'OPEN')}</td>
+      <td style="color:var(--muted);font-size:11px;font-family:monospace">${fmtDate(i.created_at||i.createdAt)}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="changeStatus('${i.id}','RESOLVED')" title="Resolve">✅</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteIncident('${i.id}')" title="Delete">🗑️</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+async function deleteIncident(id) {
+  if(!confirm('Delete this incident?')) return;
+  const res = await apiFetch(`/api/incidents/${id}`,{method:'DELETE'});
+  if(res.ok){ allIncidents=allIncidents.filter(i=>i.id!==id); renderIncidentTable(); toast('Incident deleted'); }
+  else toast('Delete failed','error');
+}
+async function changeStatus(id, status) {
+  const res = await apiFetch(`/api/incidents/${id}`,{method:'PATCH',body:JSON.stringify({status})});
+  if(res.ok){ await loadIncidents(); toast(`Status updated to ${status}`,'success'); }
+  else toast('Update failed','error');
+}
+function openAddModal() { document.getElementById('add-modal').classList.add('show'); }
+function closeModal()   { document.getElementById('add-modal').classList.remove('show'); }
+async function submitAddIncident() {
+  const type    = document.getElementById('modal-type').value.trim();
+  const system  = document.getElementById('modal-system').value.trim();
+  const reporter= document.getElementById('modal-reporter').value.trim();
+  const notes   = document.getElementById('modal-notes').value.trim();
+  if(!type||!system){ toast('Type and system are required','error'); return; }
+  const [sev, plan] = RESPONSES[type.toLowerCase()] || ['Low','Monitor system and investigate further.'];
+  const res = await apiFetch('/api/incidents',{method:'POST',body:JSON.stringify({
+    type, affected_system:system, severity:sev, reporter_name:reporter, response_plan:plan, notes
+  })});
+  if(res.ok){
+    const inc = await res.json();
+    allIncidents.unshift(inc);
+    renderIncidentTable();
+    closeModal();
+    ['modal-type','modal-system','modal-reporter','modal-notes'].forEach(id=>document.getElementById(id).value='');
+    toast('Incident added','success');
+  } else toast('Failed to add incident','error');
+}
+function exportCSV() {
+  const headers='ID,Type,System,Severity,Reporter,Status,Created\n';
+  const rows = allIncidents.map(i=>`"${i.id}","${i.type}","${i.affected_system}","${i.severity}","${i.reporter_name||''}","${i.status}","${i.created_at||''}"`).join('\n');
+  const blob = new Blob([headers+rows],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`SOC_Export_${Date.now()}.csv`; a.click();
+  toast('CSV exported','success');
+}
+
+// ═══════════════════════════════════════════════════════════
+// RISK CALCULATOR
+// ═══════════════════════════════════════════════════════════
+async function calculateRisk() {
+  const type = document.getElementById('rc-type').value;
+  const systems = parseInt(document.getElementById('rc-systems').value);
+  const sensitivity = parseInt(document.getElementById('rc-sensitivity').value);
+  const base = BASE_SCORES[type] || 3;
+  const score = (base*4) + (systems*3) + (sensitivity*3);
+  let severity='Low', action='Log and monitor activity.';
+  if(score>=70){severity='Critical';action='Immediate shutdown and escalation.';}
+  else if(score>=50){severity='High';action='Isolate and alert security team.';}
+  else if(score>=30){severity='Medium';action='Investigate and apply patches.';}
+  const cl = {Critical:'badge-critical',High:'badge-high',Medium:'badge-medium',Low:'badge-low'}[severity];
+  document.getElementById('rc-score').textContent = score;
+  document.getElementById('rc-badge').className=`badge ${cl}`;
+  document.getElementById('rc-badge').textContent = severity;
+  document.getElementById('rc-fill').style.width = Math.min(score,100)+'%';
+  document.getElementById('rc-base').textContent = base+'×4='+(base*4);
+  document.getElementById('rc-sys-sub').textContent = systems+'×3='+(systems*3);
+  document.getElementById('rc-sens-sub').textContent = sensitivity+'×3='+(sensitivity*3);
+  document.getElementById('rc-action').textContent = action;
+  document.getElementById('risk-result-card').style.display='flex';
+  lastRisk = {incident_type:type, systems_affected:systems, data_sensitivity:sensitivity, total_score:score, severity_level:severity, action_plan:action};
+}
+async function saveRiskAssessment() {
+  if(!lastRisk){ toast('Run an assessment first','error'); return; }
+  const res = await apiFetch('/api/risk-assessments',{method:'POST',body:JSON.stringify(lastRisk)});
+  if(res.ok){ toast('Assessment saved','success'); loadRiskHistory(); }
+  else toast('Save failed','error');
+}
+async function loadRiskHistory() {
+  try {
+    const res = await apiFetch('/api/risk-assessments');
+    if(!res.ok) return;
+    const data = await res.json();
+    const wrap = document.getElementById('risk-history-table');
+    if(!data.length){wrap.innerHTML='<div class="empty-state"><div class="icon">📊</div><p>No assessments yet.</p></div>';return;}
+    wrap.innerHTML=`<div class="table-wrap"><table>
+      <thead><tr><th>Type</th><th>Systems</th><th>Sensitivity</th><th>Score</th><th>Severity</th><th>Action</th><th>Date</th></tr></thead>
+      <tbody>${data.map(r=>`<tr>
+        <td style="text-transform:uppercase;font-weight:600">${r.incident_type}</td>
+        <td>${r.systems_affected}</td><td>${r.data_sensitivity}</td>
+        <td><strong style="color:var(--accent)">${r.total_score}</strong></td>
+        <td>${sevBadge(r.severity_level)}</td>
+        <td style="font-size:11px;color:var(--muted)">${r.action_plan}</td>
+        <td style="font-size:11px;font-family:monospace;color:var(--muted)">${fmtDate(r.created_at)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  } catch(e){console.error(e);}
+}
+
+// ═══════════════════════════════════════════════════════════
+// ANALYTICS
+// ═══════════════════════════════════════════════════════════
+function mkChart(id,type,labels,data,colors,opts={}) {
+  const ctx = document.getElementById(id)?.getContext('2d');
+  if(!ctx) return null;
+  return new Chart(ctx,{
+    type,
+    data:{labels,datasets:[{data,backgroundColor:colors,borderRadius:type==='bar'?6:0,borderWidth:type==='doughnut'?2:0,borderColor:type==='doughnut'?'#0d1829':'transparent'}]},
+    options:{plugins:{legend:{display:type!=='bar',labels:{color:'#6b829e',boxWidth:12,padding:14}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.parsed}`}}},scales:type==='bar'?{x:{grid:{color:'rgba(26,46,74,.5)'},ticks:{color:'#6b829e'}},y:{grid:{color:'rgba(26,46,74,.5)'},ticks:{color:'#6b829e',stepSize:1}}}:{},responsive:true,maintainAspectRatio:false,...opts}
+  });
+}
+async function loadAnalytics() {
+  try {
+    const res = await apiFetch('/api/analytics');
+    if(!res.ok) return;
+    const d = await res.json();
+    [sevChart,donutChart,monthlyChart,typesChart].forEach(c=>c&&c.destroy());
+    const sevColors = (d.by_severity||[]).map(r=>COLORS[r.severity]||'#6b829e');
+    sevChart   = mkChart('chart-severity','bar',(d.by_severity||[]).map(r=>r.severity),(d.by_severity||[]).map(r=>r.count),sevColors);
+    donutChart = mkChart('chart-donut','doughnut',(d.by_severity||[]).map(r=>r.severity),(d.by_severity||[]).map(r=>r.count),sevColors);
+    const monthPalette=['#00d4ff','#0077ff','#00e887','#f5c518','#ff7a00','#ff3b5c'];
+    monthlyChart = mkChart('chart-monthly','bar',(d.monthly||[]).reverse().map(r=>r.month),(d.monthly||[]).reverse().map(r=>r.count),monthPalette);
+    typesChart   = mkChart('chart-types','bar',(d.by_type||[]).map(r=>r.type),(d.by_type||[]).map(r=>r.count),'#00d4ff');
+  } catch(e){console.error(e);}
+}
+
+// ═══════════════════════════════════════════════════════════
+// BOOTSTRAP
+// ═══════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', ()=>{
+  if(TOKEN && CURRENT_USER) {
+    enterApp();
+  }
+  // Close modal on overlay click
+  document.getElementById('add-modal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal();});
+});
+</script>
+</body>
+</html>
